@@ -5,6 +5,7 @@
 
 #define ETH_A_LEN 6
 
+/* Structure of Ethernet Header */
 typedef struct ether_hdr
 {
 	unsigned char   h_dest[ETH_A_LEN];
@@ -12,6 +13,7 @@ typedef struct ether_hdr
 	unsigned short  h_proto;
 } ether_header;
 
+/* Structure of IP Address */
 typedef struct ip_addr {
 	u_char a_class;
 	u_char b_class;
@@ -19,6 +21,7 @@ typedef struct ip_addr {
 	u_char d_class;
 } ip_address;
 
+/* Structure of IP Header */
 typedef struct ip_hdr {
 	u_char ver_ihl;
 	u_char tos;
@@ -33,9 +36,10 @@ typedef struct ip_hdr {
 	u_int op_pad;
 } ip_header;
 
+/* Structure of TCP Header */
 typedef struct tcp_hdr {
-	u_short s_port;
-	u_short d_port;
+	u_short sport;
+	u_short dport;
 	u_int seqnum;
 	u_int acknum;
 	u_char hlen;
@@ -48,24 +52,33 @@ typedef struct tcp_hdr {
 void parse_eth_packet(const u_char* buffer);
 void parse_ip_packet(const u_char* buffer);
 void parse_tcp_packet(const u_char* buffer);
+void packet_handler(u_char, const struct pcap_pkthdr, const u_char);
 
-int main()
+int main(int argc, char** argv)
 {
 	pcap_if_t *alldevs;
 	pcap_if_t *d;
 
 	pcap_t *adhandle;
 
+	pcap_dumper_t *dumpfile;
+
 	int inum;
 	int i = 0, res = 0;
 	char errbuf[PCAP_ERRBUF_SIZE];
-
-	struct tm ltime;
-	char timestr[16];
 	struct pcap_pkthdr *header;
 	const u_char *pkt_data;
+	
+	struct tm ltime;
+	char timestr[16];
 	time_t local_tv_sec;
+	
 
+
+	if (argc != 2) {
+		printf("Usage: %s filename", argv[0]);
+		return -1;
+	}
 
 	/* Retrieve the device list on the local machine */
 	if (pcap_findalldevs_ex(PCAP_SRC_IF_STRING, NULL, &alldevs, errbuf) == -1)
@@ -120,32 +133,23 @@ int main()
 		return -1;
 	}
 
-	printf("\nListening on %s...\n", d->description);
+	/* Open the dump file */
+	dumpfile = pcap_dump_open(adhandle, argv[1]);
+	
+	if (dumpfile == NULL)
+	{
+		fprintf(stderr, "\nError opening output file\n");
+		return -1;
+	}
+
+	printf("\nListening on %s... Press Ctrl+C to stop...\n", d->description);
 
 	/* At this point, we don't need any more the device list. Free it */
 	pcap_freealldevs(alldevs);
 
-	/* Retrieve the packets */
-	while ((res = pcap_next_ex(adhandle, &header, &pkt_data)) >= 0) {
+	pcap_loop(adhandle, 0, packet_handler, (unsigned char *)dumpfile);
 
-		if (res == 0)
-			/* Timeout elapsed */
-			continue;
-
-		/* convert the timestamp to readable format */
-		local_tv_sec = header->ts.tv_sec;
-		localtime_s(&ltime, &local_tv_sec);
-		strftime(timestr, sizeof timestr, "%H:%M:%S", &ltime);
-
-		// Call parse functions
-		printf("----------------------------------------------------------\n");
-		printf("%s [%.6d] len:%d\n", timestr, header->ts.tv_usec, header->len);
-
-		parse_eth_packet(pkt_data);
-		parse_ip_packet(pkt_data);
-		parse_tcp_packet(pkt_data);
-	}
-
+	/* Handle error */
 	if (res == -1) {
 		printf("Error reading the packets: %s\n", pcap_geterr(adhandle));
 		return -1;
@@ -188,5 +192,29 @@ void parse_ip_packet(const u_char* buffer) {
 
 void parse_tcp_packet(const u_char* buffer) {
 	tcp_header *tcp = (tcp_header *)(buffer + sizeof(ether_header) + sizeof(tcp_header));
-	printf("[Port] %d -> %d\n", ntohs(tcp->s_port), ntohs(tcp->d_port));
+	printf("[Port] %d -> %d\n", ntohs(tcp->sport), ntohs(tcp->dport));
+}
+
+/* Callback function invoked by libpcap for every incoming packet */
+void packet_handler(u_char *dumpfile, const struct pcap_pkthdr *header, const u_char *pkt_data)
+{
+	struct tm ltime;
+	time_t local_tv_sec;
+
+	char timestr[16];
+
+	/* Convert the timestamp to readable format */
+	local_tv_sec = header->ts.tv_sec;
+	localtime_s(&ltime, &local_tv_sec);
+	strftime(timestr, sizeof timestr, "%H:%M:%S", &ltime);
+
+	/* Call parse functions */
+	printf("----------------------------------------------------------\n");
+	printf("%s [%.6d] len:%d\n", timestr, header->ts.tv_usec, header->len);
+
+	parse_eth_packet(pkt_data);	// Parsing Ethernet Packet
+	parse_ip_packet(pkt_data);	// Parsing IP Packet
+	parse_tcp_packet(pkt_data);	// Parsing TCP Packet
+
+	pcap_dump(dumpfile, header, pkt_data);
 }
