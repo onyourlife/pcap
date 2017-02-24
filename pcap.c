@@ -72,8 +72,6 @@ int main(int argc, char** argv)
 	struct tm ltime;
 	char timestr[16];
 	time_t local_tv_sec;
-	
-
 
 	if (argc != 2) {
 		printf("Usage: %s filename", argv[0]);
@@ -103,6 +101,7 @@ int main(int argc, char** argv)
 		return -1;
 	}
 
+	/* Select the network interface */
 	printf("Enter the interface number (1-%d):", i);
 	scanf_s("%d", &inum);
 
@@ -118,13 +117,13 @@ int main(int argc, char** argv)
 	for (d = alldevs, i = 0; i< inum - 1; d = d->next, i++);
 
 	/* Open the device */
-	if ((adhandle = pcap_open(d->name,          // name of the device
-		65536,            // portion of the packet to capture. 
-						  // 65536 guarantees that the whole packet will be captured on all the link layers
-		PCAP_OPENFLAG_PROMISCUOUS,    // promiscuous mode
-		1000,             // read timeout
-		NULL,             // authentication on the remote machine
-		errbuf            // error buffer
+	if ((adhandle = pcap_open(d->name,	// name of the device
+		65536,							// portion of the packet to capture. 
+										// 65536 guarantees that the whole packet will be captured on all the link layers
+		PCAP_OPENFLAG_PROMISCUOUS,		// promiscuous mode
+		1000,							// read timeout
+		NULL,							// authentication on the remote machine
+		errbuf							// error buffer
 	)) == NULL)
 	{
 		fprintf(stderr, "\nUnable to open the adapter. %s is not supported by WinPcap\n", d->name);
@@ -157,6 +156,7 @@ int main(int argc, char** argv)
 	return 0;
 }
 
+/* Parsing Ethernet packet */
 void parse_eth_packet(const u_char* buffer) {
 	ether_header *eth = (ether_header *)buffer;
 	printf("[MAC] %.2X:%.2X:%.2X:%.2X:%.2X:%.2X -> %.2X:%.2X:%.2X:%.2X:%.2X:%.2X\n",
@@ -176,6 +176,7 @@ void parse_eth_packet(const u_char* buffer) {
 	);
 }
 
+/* Parsing IP packet */
 void parse_ip_packet(const u_char* buffer) {
 	ip_header *ip = (ip_header *)(buffer + sizeof(ether_header));
 	printf("[IP] %3d.%3d.%3d.%3d -> %3d.%3d.%3d.%3d\n",
@@ -190,6 +191,7 @@ void parse_ip_packet(const u_char* buffer) {
 		ip->daddr.d_class);
 }
 
+/* Parsing TCP packet */
 void parse_tcp_packet(const u_char* buffer) {
 	tcp_header *tcp = (tcp_header *)(buffer + sizeof(ether_header) + sizeof(tcp_header));
 	printf("[Port] %d -> %d\n", ntohs(tcp->sport), ntohs(tcp->dport));
@@ -200,7 +202,7 @@ void packet_handler(u_char *dumpfile, const struct pcap_pkthdr *header, const u_
 {
 	struct tm ltime;
 	time_t local_tv_sec;
-
+	
 	char timestr[16];
 
 	/* Convert the timestamp to readable format */
@@ -212,9 +214,10 @@ void packet_handler(u_char *dumpfile, const struct pcap_pkthdr *header, const u_
 	printf("----------------------------------------------------------\n");
 	printf("%s [%.6d] len:%d\n", timestr, header->ts.tv_usec, header->len);
 
-	parse_eth_packet(pkt_data);	// Parsing Ethernet Packet
-	parse_ip_packet(pkt_data);	// Parsing IP Packet
-	parse_tcp_packet(pkt_data);	// Parsing TCP Packet
+	parse_eth_packet(pkt_data);	// Parsing Ethernet packet
+	parse_ip_packet(pkt_data);	// Parsing IP packet
+	parse_tcp_packet(pkt_data);	// Parsing TCP packet
 
+	/* Dump network packet */
 	pcap_dump(dumpfile, header, pkt_data);
 }
