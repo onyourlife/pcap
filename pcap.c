@@ -3,15 +3,10 @@
 #include <Winsock2.h>
 #include <WS2tcpip.h>
 
-#define ETH_A_LEN 6
+#define PROTO_IP 8
+#define PROTO_ARP 1544
 
-/* Structure of Ethernet Header */
-typedef struct ether_hdr
-{
-	unsigned char   h_dest[ETH_A_LEN];
-	unsigned char   h_source[ETH_A_LEN];
-	unsigned short  h_proto;
-} ether_header;
+#define ETH_A_LEN 6
 
 /* Structure of IP Address */
 typedef struct ip_addr {
@@ -20,6 +15,14 @@ typedef struct ip_addr {
 	u_char c_class;
 	u_char d_class;
 } ip_address;
+
+/* Structure of Ethernet Header */
+typedef struct ether_hdr
+{
+	unsigned char   h_dest[ETH_A_LEN];
+	unsigned char   h_source[ETH_A_LEN];
+	unsigned short  h_proto;
+} ether_header;
 
 /* Structure of IP Header */
 typedef struct ip_hdr {
@@ -35,6 +38,20 @@ typedef struct ip_hdr {
 	ip_address daddr;
 	u_int op_pad;
 } ip_header;
+
+/* Structure of ARP Header */
+typedef struct apr_hdr
+{
+	u_short	hw_type;
+	u_short	protocol;
+	u_char	hw_size;
+	u_char	pro_size;
+	u_short	opcode;
+	unsigned char	send_mac[ETH_A_LEN];
+	ip_address send_ip;
+	unsigned char	dest_mac[ETH_A_LEN];
+	ip_address dest_ip;
+} arp_header;
 
 /* Structure of TCP Header */
 typedef struct tcp_hdr {
@@ -52,6 +69,7 @@ typedef struct tcp_hdr {
 void parse_eth_packet(const u_char* buffer);
 void parse_ip_packet(const u_char* buffer);
 void parse_tcp_packet(const u_char* buffer);
+void parse_arp_packet(const u_char* buffer);
 void packet_handler(u_char, const struct pcap_pkthdr, const u_char);
 
 int main(int argc, char** argv)
@@ -197,6 +215,39 @@ void parse_tcp_packet(const u_char* buffer) {
 	printf("[Port] %d -> %d\n", ntohs(tcp->sport), ntohs(tcp->dport));
 }
 
+/* Parsing ARP packet */
+void parse_arp_packet(const u_char* buffer)
+{
+	arp_header *arp = (arp_header *)(buffer + sizeof(ether_header));
+	printf("[MAC] %.2X:%.2X:%.2X:%.2X:%.2X:%.2X -> %.2X:%.2X:%.2X:%.2X:%.2X:%.2X\n",
+		arp->send_mac[0],
+		arp->send_mac[1],
+		arp->send_mac[2],
+		arp->send_mac[3],
+		arp->send_mac[4],
+		arp->send_mac[5],
+
+		arp->dest_mac[0],
+		arp->dest_mac[1],
+		arp->dest_mac[2],
+		arp->dest_mac[3],
+		arp->dest_mac[4],
+		arp->dest_mac[5]
+	);	
+	printf("[IP] %3d.%3d.%3d.%3d -> %3d.%3d.%3d.%3d\n",
+		arp->send_ip.a_class,
+		arp->send_ip.b_class,
+		arp->send_ip.c_class,
+		arp->send_ip.d_class,
+
+		arp->dest_ip.a_class,
+		arp->dest_ip.b_class,
+		arp->dest_ip.c_class,
+		arp->dest_ip.d_class
+	);
+}
+
+
 /* Callback function invoked by libpcap for every incoming packet */
 void packet_handler(u_char *dumpfile, const struct pcap_pkthdr *header, const u_char *pkt_data)
 {
@@ -211,13 +262,29 @@ void packet_handler(u_char *dumpfile, const struct pcap_pkthdr *header, const u_
 	strftime(timestr, sizeof timestr, "%H:%M:%S", &ltime);
 
 	/* Call parse functions */
+	/*
 	printf("----------------------------------------------------------\n");
 	printf("%s [%.6d] len:%d\n", timestr, header->ts.tv_usec, header->len);
 
 	parse_eth_packet(pkt_data);	// Parsing Ethernet packet
-	parse_ip_packet(pkt_data);	// Parsing IP packet
-	parse_tcp_packet(pkt_data);	// Parsing TCP packet
+	*/
+	ether_header *eth = (ether_header *)pkt_data;
+	
+	
+	/* Identify type from received packets */
+	
 
+	if (eth->h_proto == PROTO_ARP) {
+		printf("[ARP]\n");
+		/* Type: ARP(0x0806) */
+		parse_arp_packet(pkt_data);
+	} else {
+		/* Type: IPv4(0x0800)*/
+//		parse_ip_packet(pkt_data);	// Parsing IP packet
+//		parse_tcp_packet(pkt_data);	// Parsing TCP packet
+	}
+	
 	/* Dump network packet */
 	pcap_dump(dumpfile, header, pkt_data);
 }
+
