@@ -234,7 +234,7 @@ void parse_arp_packet(const u_char* buffer)
 		arp->dest_mac[4],
 		arp->dest_mac[5]
 	);	
-	printf("[IP] %3d.%3d.%3d.%3d -> %3d.%3d.%3d.%3d\n",
+	printf("[I P] %3d.%3d.%3d.%3d   -> %3d.%3d.%3d.%3d\n",
 		arp->send_ip.a_class,
 		arp->send_ip.b_class,
 		arp->send_ip.c_class,
@@ -275,8 +275,9 @@ void packet_handler(u_char *dumpfile, const struct pcap_pkthdr *header, const u_
 	
 
 	if (eth->h_proto == PROTO_ARP) {
-		printf("[ARP]\n");
+		printf("======== ARP ========\n");
 		/* Type: ARP(0x0806) */
+		printf("%s [%.6d] len:%d\n", timestr, header->ts.tv_usec, header->len);
 		parse_arp_packet(pkt_data);
 	} else {
 		/* Type: IPv4(0x0800)*/
@@ -285,6 +286,6 @@ void packet_handler(u_char *dumpfile, const struct pcap_pkthdr *header, const u_
 	}
 	
 	/* Dump network packet */
-	pcap_dump(dumpfile, header, pkt_data);
+	//pcap_dump(dumpfile, header, pkt_data);
 }
 
